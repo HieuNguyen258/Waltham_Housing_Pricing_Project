@@ -1,0 +1,181 @@
+---
+title: "Waltham Real Estate Pricing Project"
+author: "Hieu Nguyen"
+date: "4/24/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,fig.width=6, fig.height=4)
+# Clear console and working environment
+cat("\f")
+rm(list = ls())
+ 
+# Set working directory
+setwd("/Users/hieunguyen/Documents/Canada Move/Canada InfoNet/4 - Job Search Plan/R project")
+
+```
+
+## Project Goals
+
+1. Produce actionable visualization for a real estate developer on the housing market trends in Waltham, Massachusetts.
+2. Produce a simple prediction model on a house based on simple set of variables to predict housing price before starting construction.
+
+## Packages Used
+```{r packages,message=FALSE}
+library(ggplot2); library(ggthemes); library(MASS); library(texreg); library(tidyr)
+```
+
+```{r set theme, include=FALSE}
+mytheme <- theme_economist() + theme(plot.title = element_text(size = 11))
+```
+
+## The Dataset
+
+The data file contains data describing more than 2,400 recent sales of single-family houses in the City of Waltham, Massachusetts.
+
+```{r data}
+load("Waltham_Real_Estate_Project_2020.RData")
+summary(Waltham_Real_Estate_Project_2020)
+```
+
+## Data cleaning
+The price distribution indicates a large proportion of non-sales (sales at $1).
+
+```{r distribution without cleaning, echo=FALSE, message=FALSE, results='hide'}
+ggplot(Waltham_Real_Estate_Project_2020, aes(Selling_Price)) + 
+  geom_histogram(binwidth = 50000) +
+  labs(title ="Selling Stats by Selling Price", x = "Selling Price", y = "Number of Sales") + 
+  scale_x_continuous(labels = scales::comma) +
+  mytheme
+```
+
+Note also that the Beds variable contains three unknowns. These data are removed from the analysis.
+
+```{r data cleaning}
+data <- drop_na(subset(Waltham_Real_Estate_Project_2020, Selling_Price > 1))
+```
+
+\newpage
+
+## What should a New Housing Build Look Like?
+
+### Creating new variables: Age, Age_Type, Current_Tenure, Gas_Heat, Open_Space
+```{r New Variables}
+data$Age <- 2021 - data$Year_Built
+data$Age_Type <- ifelse(data$Age < 50, "New", "Old")
+data$Current_Tenure <- 2021 - as.numeric(format(data$Date_Sold,"%Y"))
+data$Gas_Heat <- ifelse(data$Heat > 5 & data$Heat < 11, "Gas_Heat", "Other")
+data$Open_Space <- data$Building_Sq_Ft/data$Lot_Sq_Ft
+```
+Newer homes are homes build after the year 1971 and older homes are build before. 
+Gas_Heat variables capture home with gas as the fuel for their heating system.
+Open_Space captures the ratio between Building size and Lot size. Current_Tenure capture how long since the current owner bought the home.
+
+### Distribution of Home Sales by Home Type
+```{r distribution after cleaning by age type, echo=FALSE, message=FALSE, results='hide'}
+ggplot(data, aes(Selling_Price, fill=Age_Type)) + 
+  geom_histogram(binwidth = 50000, position = "stack") +
+  labs(title ="Selling Stats by Selling Price and Home Type", x = "Selling Price", y = "Number of Sales") + 
+  scale_fill_discrete(name = "", labels = c("New","Old")) + 
+  scale_x_continuous(labels = scales::comma) +
+  mytheme
+```
+
+### Newer homes sale prices are increasing faster than that of older homes
+```{r Home Sales by Sale Age and Home Type, echo=FALSE, message=FALSE, results='hide'}
+ggplot(data, aes(as.factor(format(Date_Sold,"%Y")),Selling_Price, fill=Age_Type)) + 
+  geom_boxplot(position = "dodge") + 
+  labs(title ="Home Sales by Sale Year and Age Type", x = "Sale Year", y = "Selling Price") + 
+  scale_fill_discrete(name = "", labels = c("New","Old")) + 
+  scale_y_continuous(labels = scales::comma) +
+  mytheme
+```
+
+### Newer homes sold for a much higher price in school district 3 and 4
+```{r Home Sales by School District and Age Type, echo=FALSE, message=FALSE, results='hide'}
+ggplot(data, aes(factor(Elementary_School),Selling_Price, fill=Age_Type)) + 
+  geom_boxplot(position = "dodge") + 
+  labs(title ="Home Sales by School District and Age Type", x = "Elementary School Districts", y = "Selling Price") + 
+  scale_fill_discrete(name = "", labels = c("New","Old")) + 
+  scale_y_continuous(labels = scales::comma) +
+  mytheme
+```
+
+### Newer homes with 5 beds sold at a highest average price among all categories
+```{r Home Sales by number of Beds and Age Type, echo=FALSE, message=FALSE, results='hide'}
+ggplot(data, aes(factor(Beds),Selling_Price,fill=Age_Type)) + 
+  geom_boxplot(position = "dodge") + 
+  labs(title ="Home Sales by number of Beds and Age Type", x = "# of Beds", y = "Selling Price") + 
+  scale_fill_discrete(name = "", labels = c("New","Old")) +
+  scale_y_continuous(labels = scales::comma) +
+  mytheme
+```
+
+### Newer homes have on average 2.5 baths
+```{r Home Sales by number of Baths and Age Type, echo=FALSE, message=FALSE, results='hide'}
+ggplot(data, aes(Age_Type, Baths)) + 
+  geom_boxplot(aes(fill = Age_Type)) + 
+  labs(title ="Home Sales by number of Baths and Age Type", x = "Home Type", y = "Baths") + 
+  scale_fill_discrete(name = "", labels = c("New","Old")) +
+  scale_y_continuous(breaks = seq(0,6,0.5)) +
+  mytheme
+```
+
+### Homes with gas based heating system sold at a slightly higher average price than other types
+```{r Home Sales by School District and Heating Type, echo=FALSE, message=FALSE, results='hide'}
+ggplot(data, aes(factor(Elementary_School), Selling_Price, fill=Gas_Heat)) + 
+  geom_boxplot(position = "dodge") + 
+  labs(title ="Home Sales by School District and Heating Type", x = "School District", y = "Selling Price") + 
+  scale_fill_discrete(name = "", labels = c("Gas","Other")) +
+  scale_y_continuous(labels = scales::comma) +
+  mytheme
+```
+
+### Newer homes took up a larger percentage of the lot than older homes do
+```{r Open Space Ratio by Home Type, echo=FALSE, message=FALSE, results='hide'}
+ggplot(data,aes(Age_Type,Open_Space,fill=Age_Type)) + 
+  geom_boxplot() + 
+  labs(title ="Open Space Ratio by Age Type", x = "Home Type", y = "Open Space Ratio") + 
+  scale_fill_discrete(name = "", labels = c("New","Old")) +
+  scale_y_continuous(labels = scales::percent) +
+  mytheme
+```
+
+### More Newer homes have 3 parking spaces than those with a single parking space
+```{r Parking accomodation by home type, echo=FALSE, message=FALSE, results='hide'}
+ggplot(data, aes(Age_Type, fill=factor(Parking))) + 
+  geom_bar(position="fill") +
+  labs(title ="Parking accomodation by Home Type", x = "Home Type", y = "Percent") + 
+  scale_fill_discrete(name = "Parking Spaces") +
+  scale_y_continuous(labels = scales::percent) +
+  mytheme
+```
+
+## Prediction Models
+
+Both model perform really well, both explaining 78% of the total variations in the selling prices of homes in Waltham, Massachusetts in the past 9 years. Using the Step-wise model, we can provide a few rules of thumb about the expected selling prices of home in the Waltham real estate market:
+
+1. Each additional bathroom increases the average home sale by $34,606, All-Else-Equals (AEE).
+2. Each additional room increases the average home sale by $9,553, AEE.
+3. Having central AC increases the average home sale by $25,890, AEE.
+4. Having a Gas heating system increases the average home sale by $9,954, AEE.
+5. Having a finished basement increases the average home sale by $18.039, AEE.
+6. Each additional parking spot increases the average home sale by $12,931, AEE.
+7. Each additional square feet of the building increases the average home sale by $93, AEE.
+8. The average selling price of home increases by $32,948 each year in the past 9 years.
+9. Newer homes on average sold for $20,099 higher, AEE.
+
+\newpage
+
+```{r regression model hand picked, echo=FALSE}
+full.model <- lm(Selling_Price ~ Beds + Baths + Building_Sq_Ft + Lot_Sq_Ft + Year_Built + 
+                   Zip_Code + Elementary_School + Central_AC + Finished_Basement + Parking + 
+                   Rooms + Building_Grade + Building_Condition + Gas_Heat + Age_Type + 
+                   Open_Space + Current_Tenure,data)
+step.model <- stepAIC(full.model, direction = "backward", trace = FALSE)
+
+screenreg(list(full.model, step.model),custom.model.names = c("Full Model","Step Wise"))
+
+```
+
